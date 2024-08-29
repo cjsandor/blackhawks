@@ -1,48 +1,65 @@
 import axios from 'axios';
 
-   const api = axios.create({
-     baseURL: process.env.REACT_APP_API_URL
-   });
+// Create an axios instance with default configuration
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  timeout: 5000, // 5 seconds timeout
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
+});
 
-   // Request interceptor for API calls
-   api.interceptors.request.use(
-     async config => {
-       const token = localStorage.getItem('token');
-       if (token) {
-         config.headers = { 
-           'Authorization': `Bearer ${token}`,
-           'Accept': 'application/json',
-           'Content-Type': 'application/json'
-         }
-       }
-       return config;
-     },
-     error => {
-       Promise.reject(error)
-   });
+// Request interceptor: Adds authentication token to requests
+api.interceptors.request.use(
+  async config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['x-auth-token'] = token;
+    }
+    return config;
+  },
+  error => {
+    return Promise.reject(error);
+  }
+);
 
-   // Response interceptor for API calls
-   api.interceptors.response.use((response) => {
-     return response
-   }, async function (error) {
-     if (error.response.status === 401) {
-       // Handle 401 error - e.g., redirect to login page
-     }
-     return Promise.reject(error);
-   });
+// Response interceptor: Handles and logs errors
+api.interceptors.response.use(
+  response => response,
+  error => {
+    console.error('API Error:', error);
+    return Promise.reject(error);
+  }
+);
 
-   export const login = (username, password) => {
-     return api.post('/auth/login', { username, password });
-   };
+// Function to handle user login
+export const login = (username, password) => {
+  return api.post('/auth/login', { username, password });
+};
 
-   export const getGames = () => {
-     return api.get('/games');
-   };
+// Function to fetch games from the server
+export const getGames = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await api.get('/schedule', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    console.log('API response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Error in getGames:', error);
+    throw error;
+  }
+};
 
-   export const updateAttendance = (gameId, userId, attending) => {
-     return api.put(`/games/${gameId}/attendance`, { userId, attending });
-   };
+// Function to update attendance status for a game
+export const updateAttendance = (gameId, person, status) => {
+  return api.put(`/games/${gameId}/attendance`, { person, status });
+};
 
-   // Add more API calls as needed
+// Add more API calls as needed
 
-   export default api;
+export default api;

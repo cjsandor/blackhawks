@@ -12,8 +12,12 @@ const Login = ({ onLoginSuccess }) => {
     try {
       const response = await axios.post('http://localhost:5000/api/auth/login', { username, password });
       console.log('Login response:', response.data);
-      localStorage.setItem('token', response.data.token);
-      onLoginSuccess();
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        onLoginSuccess();
+      } else {
+        setError('Login failed: No token received');
+      }
     } catch (err) {
       console.error('Login error:', err.response ? err.response.data : err.message);
       setError(err.response ? err.response.data.message : 'An error occurred');
