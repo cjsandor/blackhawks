@@ -1,3 +1,5 @@
+// File: blackhawks/src/components/Game.js
+
 import React from 'react';
 
 const Game = ({ game, onAttendanceChange }) => {

@@ -1,3 +1,5 @@
+// File: blackhawks/src/pages/DashboardPage.js
+
 import React, { useState, useEffect } from 'react';
 import Schedule from '../components/Schedule';
 import UpcomingGames from '../components/UpcomingGames';

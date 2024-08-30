@@ -7,36 +7,62 @@ import Login from './components/Login';
 
 const App = () => {
   const [scheduleData, setScheduleData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   const fetchScheduleData = async () => {
+    if (!isAuthenticated) return;
+    
+    setLoading(true);
+    setError(null);
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        setIsAuthenticated(false);
+        throw new Error('No authentication token found');
+      }
       const response = await axios.get('http://localhost:5000/api/schedule', {
-        headers: { 'x-auth-token': token }
+        headers: { Authorization: `Bearer ${token}` }
       });
       setScheduleData(response.data);
-      setLoading(false);
     } catch (err) {
       console.error('Error fetching schedule data:', err);
-      setError('Failed to fetch schedule data');
+      if (err.response && err.response.status === 401) {
+        setIsAuthenticated(false);
+        localStorage.removeItem('token');
+        setError('Session expired. Please log in again.');
+      } else {
+        setError(err.response?.data?.message || 'Failed to fetch schedule data');
+      }
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
-      fetchScheduleData();
-    } else {
-      setLoading(false);
-    }
+    const checkAuth = () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        setIsAuthenticated(true);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      }
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
   }, []);
 
-  const handleLoginSuccess = () => {
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchScheduleData();
+    }
+  }, [isAuthenticated]);
+
+  const handleLoginSuccess = (token) => {
+    localStorage.setItem('token', token);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setIsAuthenticated(true);
     fetchScheduleData();
   };
@@ -52,17 +78,13 @@ const App = () => {
     });
   };
 
-  if (loading) return (
-    <Container maxWidth="lg" sx={{ textAlign: 'center', mt: 4 }}>
-      <CircularProgress />
-    </Container>
-  );
-  
-  if (error) return (
-    <Container maxWidth="lg" sx={{ textAlign: 'center', mt: 4 }}>
-      <Typography color="error">Error: {error}</Typography>
-    </Container>
-  );
+  if (isCheckingAuth) {
+    return (
+      <Container maxWidth="lg" sx={{ textAlign: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -83,7 +105,13 @@ const App = () => {
         <Typography variant="h3" component="h1" gutterBottom align="center">
           Blackhawks Season Schedule
         </Typography>
-        {scheduleData.length > 0 ? (
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Typography color="error" align="center">{error}</Typography>
+        ) : scheduleData.length > 0 ? (
           <>
             <Box sx={{ mb: 4, overflowX: 'auto' }}>
               <UpcomingGames games={scheduleData} />
@@ -91,7 +119,7 @@ const App = () => {
             <Schedule games={scheduleData} onAttendanceChange={handleAttendanceChange} />
           </>
         ) : (
-          <Typography>No games scheduled at the moment.</Typography>
+          <Typography align="center">No games scheduled at the moment.</Typography>
         )}
       </Box>
     </Container>

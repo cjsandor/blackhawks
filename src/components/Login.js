@@ -1,22 +1,24 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { TextField, Button, Box, Typography } from '@mui/material';
+import { login } from '../services/api';
 
 const Login = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', { username, password });
-      console.log('Login response:', response.data);
-      localStorage.setItem('token', response.data.token);
+      const response = await login(username, password);
+      const token = response.data.token;
+      localStorage.setItem('token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       onLoginSuccess();
     } catch (err) {
-      console.error('Login error:', err.response ? err.response.data : err.message);
-      setError(err.response ? err.response.data.message : 'An error occurred');
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || 'An error occurred during login');
     }
   };
 

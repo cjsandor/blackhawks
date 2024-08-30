@@ -1,3 +1,5 @@
+// File: blackhawks/src/components/PrivateRoutes.js
+
 import React from 'react';
 import { Route, Redirect } from 'react-router-dom';
 import authService from '../services/authService';

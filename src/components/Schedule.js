@@ -1,59 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Typography } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Typography, Snackbar } from '@mui/material';
+import { updateAttendance } from '../services/api';
 
 const Schedule = ({ games, onAttendanceChange }) => {
-  const [attendance, setAttendance] = useState({});
+  const [localGames, setLocalGames] = useState(games);
+  const [errorMessage, setErrorMessage] = useState('');
   const ticketHolders = ['Charlie', 'Russell', 'Sam', 'Colin'];
 
   useEffect(() => {
-    console.log('Games prop updated:', games);
-    const initialAttendance = {};
-    games.forEach(game => {
-      initialAttendance[game.id] = game.attendance || {};
-    });
-    console.log('Initial attendance state:', initialAttendance);
-    setAttendance(initialAttendance);
+    // Initialize localGames with the games prop, ensuring attendance is properly set
+    const initializedGames = games.map(game => ({
+      ...game,
+      attendance: game.attendance || ticketHolders.reduce((acc, holder) => {
+        acc[holder] = 'Not Attending';
+        return acc;
+      }, {})
+    }));
+    setLocalGames(initializedGames);
   }, [games]);
 
   const toggleAttendance = async (gameId, person) => {
-    const currentAttendance = attendance[gameId] || {};
-    const isCurrentlyAttending = !!currentAttendance[person];
-    const newIsAttending = !isCurrentlyAttending;
-
-    console.log(`Toggling attendance for game ${gameId}, person: ${person}, new status: ${newIsAttending}`);
-
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.put(`http://localhost:5000/api/games/${gameId}/attendance`, 
-        { person, isAttending: newIsAttending },
-        { headers: { 'x-auth-token': token } }
-      );
+      const game = localGames.find(g => g.id === gameId);
+      const currentStatus = game.attendance[person] || 'Not Attending';
+      const newStatus = currentStatus === 'Attending' ? 'Not Attending' : 'Attending';
 
-      console.log('Server response:', response.data);
+      const response = await updateAttendance(gameId, person, newStatus);
 
-      const updatedAttendance = response.data.attendance || {};
-      console.log('Updated attendance from server:', updatedAttendance);
+      if (response.data && response.data.attendance) {
+        setLocalGames(prevGames => 
+          prevGames.map(g => 
+            g.id === gameId 
+              ? { ...g, attendance: { ...g.attendance, ...response.data.attendance } }
+              : g
+          )
+        );
 
-      setAttendance(prev => {
-        const newAttendance = {
-          ...prev,
-          [gameId]: updatedAttendance
-        };
-        console.log('New attendance state:', newAttendance);
-        return newAttendance;
-      });
-
-      onAttendanceChange(gameId, updatedAttendance);
+        onAttendanceChange(gameId, response.data.attendance);
+      }
     } catch (error) {
       console.error('Error updating attendance:', error);
-      // Handle error (e.g., show an error message to the user)
+      if (error.response && error.response.status === 404) {
+        setErrorMessage(`User ${person} not found. Please ensure all users are created in the database.`);
+      } else {
+        setErrorMessage('An error occurred while updating attendance. Please try again.');
+      }
     }
   };
 
-  const getAvailableTickets = (gameId) => {
-    const gameAttendance = attendance[gameId] || {};
-    return ticketHolders.filter(person => !gameAttendance[person]).length;
+  const handleCloseError = () => {
+    setErrorMessage('');
   };
 
   const formatDate = (dateString) => {
@@ -61,45 +57,58 @@ const Schedule = ({ games, onAttendanceChange }) => {
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
+  const getAvailableTickets = (game) => {
+    return ticketHolders.filter(person => game.attendance[person] !== 'Attending').length;
+  };
+
   return (
-    <TableContainer component={Paper}>
-      <Typography variant="h5" sx={{ p: 2, textAlign: 'center' }}><strong>Full Season Schedule</strong></Typography>
-      <Table sx={{ minWidth: 650 }} aria-label="schedule table">
-        <TableHead>
-          <TableRow>
-            <TableCell>Date</TableCell>
-            <TableCell>Time</TableCell>
-            <TableCell align="center">Opponent</TableCell>
-            {ticketHolders.map(person => (
-              <TableCell key={person} align="center">{person}</TableCell>
-            ))}
-            <TableCell align="center">Available Tickets</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {games.map((game) => (
-            <TableRow key={game.id}>
-              <TableCell>{formatDate(game.date)}</TableCell>
-              <TableCell>{game.time}</TableCell>
-              <TableCell align="center"><strong>{game.opponent}</strong></TableCell>
+    <>
+      <Typography variant="h4" component="h2" gutterBottom align="center">
+        Full Season Schedule
+      </Typography>
+      <TableContainer component={Paper}>
+        <Table sx={{ minWidth: 650 }} aria-label="schedule table">
+          <TableHead>
+            <TableRow>
+              <TableCell>Date</TableCell>
+              <TableCell>Time</TableCell>
+              <TableCell>Opponent</TableCell>
               {ticketHolders.map(person => (
-                <TableCell key={`${game.id}-${person}`} align="center">
-                  <Button
-                    variant="contained"
-                    onClick={() => toggleAttendance(game.id, person)}
-                    color={attendance[game.id]?.[person] ? "success" : "error"}
-                    size="small"
-                  >
-                    {attendance[game.id]?.[person] ? 'Attending' : 'Not Attending'}
-                  </Button>
-                </TableCell>
+                <TableCell key={person} align="center">{person}</TableCell>
               ))}
-              <TableCell align="center"><strong>{getAvailableTickets(game.id)}</strong></TableCell>
+              <TableCell align="center">Available Tickets</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+          </TableHead>
+          <TableBody>
+            {localGames.map((game) => (
+              <TableRow key={game.id}>
+                <TableCell>{formatDate(game.date)}</TableCell>
+                <TableCell>{game.time}</TableCell>
+                <TableCell>{game.opponent}</TableCell>
+                {ticketHolders.map(person => (
+                  <TableCell key={`${game.id}-${person}`} align="center">
+                    <Button
+                      variant="contained"
+                      onClick={() => toggleAttendance(game.id, person)}
+                      color={game.attendance[person] === 'Attending' ? "success" : "error"}
+                    >
+                      {game.attendance[person] === 'Attending' ? 'Attending' : 'Not Attending'}
+                    </Button>
+                  </TableCell>
+                ))}
+                <TableCell align="center">{getAvailableTickets(game)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <Snackbar
+        open={!!errorMessage}
+        autoHideDuration={6000}
+        onClose={handleCloseError}
+        message={errorMessage}
+      />
+    </>
   );
 };
 

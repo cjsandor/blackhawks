@@ -1,3 +1,5 @@
+// File: blackhawks/src/components/AttendanceToggle.js
+
 import React from 'react';
 
 const AttendanceToggle = ({ holderId, gameId, isAttending, toggleAttendance }) => (
